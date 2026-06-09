@@ -239,20 +239,22 @@ const LIGHT = {
 
 // ─── CICLO ───────────────────────────────────────────────────────────────────
 const CYCLE = [
-  { main:'Tributário',                    extra:null },
-  { main:'CDC (Consumidor)',               extra:'Leis Penais Especiais' },
-  { main:'Direito Civil',                  extra:null },
-  { main:'Proc. Civil',                    extra:null },
-  { main:'Constitucional',                 extra:null },
-  { main:'Eleitoral',                      extra:null },
-  { main:'Ambiental',                      extra:null },
-  { main:'Administrativo',                 extra:null },
-  { main:'Direitos Humanos',               extra:'Humanística' },
-  { main:'Direito Penal',                  extra:null },
-  { main:'Penal Especial (Pt. Especial)',  extra:null },
-  { main:'Proc. Penal',                    extra:null },
-  { main:'Empresarial',                    extra:null },
-  { main:'ECA',                            extra:null },
+  // Semana 1
+  { main:'Administrativo',           extra:null }, // Sábado
+  { main:'Civil e Processo Civil',   extra:null }, // Domingo (2 matérias → tempo dobra)
+  { main:'Constitucional',           extra:null }, // Segunda
+  { main:'Penal',                    extra:null }, // Terça
+  { main:'ECA',                      extra:null }, // Quarta
+  { main:'Ambiental',                extra:null }, // Quinta
+  { main:'Empresarial',              extra:null }, // Sexta
+  // Semana 2
+  { main:'Humanística',              extra:null }, // Sábado
+  { main:'Processo Penal e Consumidor', extra:null }, // Domingo (2 matérias → tempo dobra)
+  { main:'Penal Especial',           extra:null }, // Segunda
+  { main:'Eleitoral',                extra:null }, // Terça
+  { main:'Direitos Humanos',         extra:null }, // Quarta
+  { main:'Legislação Penal',         extra:null }, // Quinta
+  { main:'Tributário',               extra:null }, // Sexta
 ];
 
 function getCycleInfo(date) {
@@ -263,17 +265,21 @@ function getCycleInfo(date) {
 }
 function getActivities(date) {
   const info = getCycleInfo(date);
+  const isSunday = date.getDay() === 0;
+  const mult = isSunday ? 2 : 1; // domingo: tempo dobrado (2 matérias)
   const acts = [
-    { id:'lei_seca',     name:'Lei Seca',              emoji:'📖', target_min:30 },
-    { id:'informativos', name:'Informativos',           emoji:'📰', target_min:15 },
-    { id:'teoria',       name:`Teoria (${info.main})`, emoji:'🎯', target_min:45 },
-    { id:'anki',         name:'Anki',                  emoji:'🃏', target_min:15 },
-    { id:'questoes',     name:'Questões',               emoji:'✏️', target_min:45 },
+    { id:'lei_seca',     name:'Lei Seca',              emoji:'📖', target_min:40 * mult },
+    { id:'informativos', name:'Informativos',           emoji:'📰', target_min:20 * mult },
+    { id:'teoria',       name:`Teoria (${info.main})`, emoji:'🎯', target_min:40 * mult },
+    { id:'anki',         name:'Anki',                  emoji:'🃏', target_min:20 * mult },
+    { id:'questoes',     name:'Questões',               emoji:'✏️', target_min:60 * mult },
   ];
-  if (info.extra) acts.push({ id:'teoria_extra', name:`Teoria (${info.extra})`, emoji:'🎯', target_min:35 });
   return acts;
 }
-function getDailyTarget(date) { return getCycleInfo(date).extra ? 185 : 150; }
+function getDailyTarget(date) {
+  const isSunday = date.getDay() === 0;
+  return isSunday ? 360 : 180; // domingo: 2 matérias → tempo dobrado
+}
 function dateToKey(date) {
   return `study:${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 }
@@ -1638,7 +1644,7 @@ function SettingsScreen({ C, dark, onToggleDark, dailyGoalOverride, onSetDailyGo
       <div style={{textAlign:'center',marginTop:28,color:C.textSub,fontSize:12,lineHeight:2}}>
         <div style={{fontWeight:700,fontSize:13,color:C.textMid,marginBottom:2}}>⚖️ Painel de Estudos — Magistratura</div>
         <div>Ciclo de 14 dias · Início: 18/04/2026</div>
-        <div>Meta padrão: 150 min/dia · 185 min c/ extra</div>
+        <div>Meta padrão: 180 min/dia · 360 min no domingo (2 matérias)</div>
       </div>
     </div>
   );
