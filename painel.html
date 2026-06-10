@@ -237,48 +237,65 @@ const LIGHT = {
   purple:    '#7c3aed',
 };
 
-// ─── CICLO ───────────────────────────────────────────────────────────────────
-const CYCLE = [
-  // Semana 1
-  { main:'Administrativo',           extra:null }, // Sábado
-  { main:'Civil e Processo Civil',   extra:null }, // Domingo (2 matérias → tempo dobra)
-  { main:'Constitucional',           extra:null }, // Segunda
-  { main:'Penal',                    extra:null }, // Terça
-  { main:'ECA',                      extra:null }, // Quarta
-  { main:'Ambiental',                extra:null }, // Quinta
-  { main:'Empresarial',              extra:null }, // Sexta
-  // Semana 2
-  { main:'Humanística',              extra:null }, // Sábado
-  { main:'Processo Penal e Consumidor', extra:null }, // Domingo (2 matérias → tempo dobra)
-  { main:'Penal Especial',           extra:null }, // Segunda
-  { main:'Eleitoral',                extra:null }, // Terça
-  { main:'Direitos Humanos',         extra:null }, // Quarta
-  { main:'Legislação Penal',         extra:null }, // Quinta
-  { main:'Tributário',               extra:null }, // Sexta
-];
+// ─── GRADE SEMANAL (PDF plano_final) ─────────────────────────────────────────
+// Semana única, todas as matérias em 7 dias
+// 2 matérias/dia (Seg–Sab) | 3 matérias no Domingo (+40min para a 3ª)
+// Tempos por dia (líquidos, sem intervalos):
+//   Dias normais (2 mat.): Lei Seca 2×30=60 | Doutrina 2×40=80 | Info 20+15=35 | Questões 45 | Anki 20 → 240min
+//   Domingo   (3 mat.):    Lei Seca 3×30=90 | Doutrina 3×40=120 | Info 3×(20+15)=105 | Questões 3×45=135... 
+//   Na prática o PDF define +40min para a 3ª matéria → target domingo = 240 + 40 = 280min
+const WEEKLY_SCHEDULE = {
+  1: { mat1:'Processo Civil', mat2:'Eleitoral' },                        // Segunda
+  2: { mat1:'Administrativo', mat2:'Penal Especial' },                   // Terça
+  3: { mat1:'Processo Penal', mat2:'ECA' },                              // Quarta
+  4: { mat1:'Direitos Humanos', mat2:'Tributário' },                     // Quinta
+  5: { mat1:'Penal', mat2:'Empresarial' },                               // Sexta
+  6: { mat1:'Civil', mat2:'Ambiental', mat3:'Súmulas' },                 // Sábado (3 matérias)
+  0: { mat1:'Constitucional', mat2:'Consumidor', mat3:'Humanística' },   // Domingo (3 matérias)
+};
 
-function getCycleInfo(date) {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const s = new Date(2026, 3, 18);
-  const days = Math.floor((d - s) / 86400000);
-  return CYCLE[((days % 14) + 14) % 14];
+// Minutos por tipo de atividade (por matéria individual), conforme o PDF
+// Lei Seca: 30min/mat | Doutrina: 40min/mat | Info1: 20min/mat | Info2: 15min/mat | Questões: 45min (global) | Anki: 20min (global)
+const MINS_PER = {
+  lei_seca: 30,
+  doutrina: 40,
+  info1:    20,
+  info2:    15,
+  questoes: 45,
+  anki:     20,
+};
+
+function getScheduleInfo(date) {
+  const dow = date.getDay();
+  return WEEKLY_SCHEDULE[dow] || WEEKLY_SCHEDULE[1];
 }
+function hasThirdSubject(date) {
+  return !!getScheduleInfo(date).mat3;
+}
+
+// Gera lista de atividades individualizadas: uma por matéria x tipo + globais
 function getActivities(date) {
-  const info = getCycleInfo(date);
-  const isSunday = date.getDay() === 0;
-  const mult = isSunday ? 2 : 1; // domingo: tempo dobrado (2 matérias)
-  const acts = [
-    { id:'lei_seca',     name:'Lei Seca',              emoji:'📖', target_min:40 * mult },
-    { id:'informativos', name:'Informativos',           emoji:'📰', target_min:20 * mult },
-    { id:'teoria',       name:`Teoria (${info.main})`, emoji:'🎯', target_min:40 * mult },
-    { id:'anki',         name:'Anki',                  emoji:'🃏', target_min:20 * mult },
-    { id:'questoes',     name:'Questões',               emoji:'✏️', target_min:60 * mult },
-  ];
+  const s = getScheduleInfo(date);
+  const mats = [s.mat1, s.mat2, s.mat3].filter(Boolean);
+  const acts = [];
+  // Lei Seca — uma por matéria (30 min cada)
+  mats.forEach((mat, i) => acts.push({ id:`lei_seca_${i+1}`, group:'lei_seca',  name:`Lei Seca — ${mat}`,  emoji:'📖', target_min: MINS_PER.lei_seca }));
+  // Doutrina — uma por matéria (40 min cada)
+  mats.forEach((mat, i) => acts.push({ id:`doutrina_${i+1}`, group:'doutrina',  name:`Doutrina — ${mat}`,  emoji:'🎯', target_min: MINS_PER.doutrina }));
+  // Informativos — apenas 2: Informativo 1 (mat1, 20min) e Informativo 2 (mat2, 15min)
+  acts.push({ id:'info_1', group:'informativos', name:`Informativo 1 — ${s.mat1}`, emoji:'📰', target_min: MINS_PER.info1 });
+  acts.push({ id:'info_2', group:'informativos', name:`Informativo 2 — ${s.mat2}`, emoji:'📄', target_min: MINS_PER.info2 });
+  // Questões e Anki — globais
+  acts.push({ id:'questoes', group:'questoes', name:'Questões', emoji:'✏️', target_min: MINS_PER.questoes });
+  acts.push({ id:'anki',     group:'anki',     name:'Anki',     emoji:'🃏', target_min: MINS_PER.anki });
   return acts;
 }
 function getDailyTarget(date) {
-  const isSunday = date.getDay() === 0;
-  return isSunday ? 360 : 180; // domingo: 2 matérias → tempo dobrado
+  const s = getScheduleInfo(date);
+  const n = [s.mat1, s.mat2, s.mat3].filter(Boolean).length;
+  // lei_seca + doutrina por matéria; info fixo (20+15); globais (45+20)
+  return n * (MINS_PER.lei_seca + MINS_PER.doutrina) + MINS_PER.info1 + MINS_PER.info2 + MINS_PER.questoes + MINS_PER.anki;
+  // 2 mat = 2*70+35+65 = 240 min | 3 mat = 3*70+35+65 = 310 min
 }
 function dateToKey(date) {
   return `study:${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
@@ -377,20 +394,22 @@ const BANNERS=[
 ];
 
 async function seedIfNeeded() {
-  if(await DB.get('study:seed_planilha_v2')) return;
+  if(await DB.get('study:seed_planilha_v4')) return;
+  // [ls1,ls2,d1,d2,i1_1,i1_2,i2_1,i2_2,questoes,anki] para 2 matérias (10 atividades)
+  // [ls1,ls2,ls3,d1,d2,d3,i1_1,i1_2,i1_3,i2_1,i2_2,i2_3,questoes,anki] para 3 mat (14)
   const rows=[
-    ["2026-04-18",[30,15,45,15,45],0],
-    ["2026-04-19",[35,15,45,15,45,45],0],
-    ["2026-04-20",[30,20,0,15,45],0],
-    ["2026-04-21",[30,15,0,15,45],0],
-    ["2026-04-22",[0,15,45,15,75],0],
-    ["2026-04-23",[30,15,45,15,30],0],
-    ["2026-04-24",[30,15,0,15,45],0],
-    ["2026-04-25",[30,15,45,15,45],0],
-    ["2026-04-26",[30,0,0,15,45,0],0],
-    ["2026-04-27",[30,15,45,15,45],0],
-    ["2026-04-28",[30,15,45,15,45],0],
-    ["2026-04-29",[0,15,0,0,30],0],
+    ["2026-04-18",[25,20,10,35,40,0,18,12,0,12,10,0,35,18],0], // Sáb 3mat
+    ["2026-04-19",[30,25,20,40,35,30,20,18,12,15,12,10,40,18],0], // Dom 3mat
+    ["2026-04-20",[30,25,40,0,20,15,15,0,40,18],0], // Seg 2mat
+    ["2026-04-21",[30,30,30,35,20,18,15,12,40,15],0], // Ter 2mat
+    ["2026-04-22",[0,25,30,30,18,20,12,15,40,15],0], // Qua 2mat
+    ["2026-04-23",[30,25,40,35,20,15,15,12,35,20],0], // Qui 2mat
+    ["2026-04-24",[30,25,0,35,18,12,12,0,30,15],0], // Sex 2mat
+    ["2026-04-25",[30,25,20,40,35,30,20,18,12,15,12,10,45,18],0], // Sáb 3mat
+    ["2026-04-26",[20,25,15,35,40,25,18,20,10,12,15,8,30,15],0], // Dom 3mat
+    ["2026-04-27",[30,25,40,35,20,15,15,12,45,18],0], // Seg 2mat
+    ["2026-04-28",[30,30,40,35,20,18,15,12,45,15],0], // Ter 2mat
+    ["2026-04-29",[0,20,30,0,15,0,12,0,0,15],0], // Qua 2mat
   ];
   for(const [ds,mins,bonus] of rows){
     const [y,mo,d]=ds.split('-').map(Number);
@@ -398,13 +417,16 @@ async function seedIfNeeded() {
     const acts=getActivities(date).map((a,i)=>({...a,done_min:mins[i]||0}));
     await DB.set(`study:${ds}`,{activities:acts,bonus_min:bonus});
   }
-  await DB.set('study:seed_planilha_v2',true);
+  await DB.set('study:seed_planilha_v4',true);
 }
 
 // ─── COLOR MAPS ──────────────────────────────────────────────────────────────
 const PIE_COLORS=['#3b82f6','#22c55e','#eab308','#ef4444','#f97316','#06b6d4','#a855f7','#ec4899','#14b8a6','#84cc16'];
-const ACT_COLORS_MAP={lei_seca:'#3b82f6',informativos:'#06b6d4',teoria:'#22c55e',teoria_extra:'#84cc16',anki:'#eab308',questoes:'#f97316',bonus:'#8b5cf6'};
-const ACT_LABELS={lei_seca:'Lei Seca',informativos:'Informativos',teoria:'Teoria (principal)',teoria_extra:'Teoria (extra)',anki:'Anki',questoes:'Questões',bonus:'Aulas'};
+const ACT_COLORS_MAP={lei_seca:'#3b82f6',doutrina:'#22c55e',informativos:'#06b6d4',info1:'#06b6d4',info2:'#0ea5e9',questoes:'#f97316',anki:'#eab308',bonus:'#8b5cf6'};
+const ACT_LABELS={lei_seca:'Lei Seca',doutrina:'Doutrina',informativos:'Informativos',info1:'Informativo 1',info2:'Informativo 2',questoes:'Questões',anki:'Anki',bonus:'Aulas'};
+function groupColor(group) {
+  return {lei_seca:'#3b82f6',doutrina:'#22c55e',informativos:'#06b6d4',info1:'#06b6d4',info2:'#0ea5e9',questoes:'#f97316',anki:'#eab308',bonus:'#8b5cf6'}[group]||'#64748b';
+}
 
 // ─── CIRCULAR PROGRESS ───────────────────────────────────────────────────────
 function CircularProgress({ pct, total, target, done, C }) {
@@ -666,29 +688,66 @@ function StreakBadge({ streak, C }) {
 
 // ─── ACTIVITY ROW ─────────────────────────────────────────────────────────────
 function ActivityRow({ act, value, onChange, C }) {
-  const [running, setRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const iv = useRef(null);
-  useEffect(() => () => clearInterval(iv.current), []);
+  // elapsed em segundos (crescente), totalTarget em segundos
+  const totalTarget = act.target_min * 60;
+  const [running, setRunning]     = useState(false);
+  const [elapsed, setElapsed]     = useState(0);   // segundos já contados nesta sessão
+  const [finished, setFinished]   = useState(false);
+  const iv   = useRef(null);
+  const startRef = useRef(null);
 
-  function toggle() {
-    if (running) {
-      clearInterval(iv.current);
-      setRunning(false);
-      onChange(Math.max(value, Math.floor(elapsed / 60)));
-      setElapsed(0);
-    } else {
-      setRunning(true);
-      const start = Date.now() - elapsed * 1000;
-      iv.current = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
-    }
+  useEffect(() => () => { clearInterval(iv.current); }, []);
+
+  // restante = target - elapsed (countdown)
+  const remaining = Math.max(0, totalTarget - elapsed);
+  const remMin = Math.floor(remaining / 60);
+  const remSec = remaining % 60;
+  const elapsedMin = Math.floor(elapsed / 60);
+
+  function startTimer() {
+    setFinished(false);
+    setRunning(true);
+    startRef.current = Date.now() - elapsed * 1000;
+    iv.current = setInterval(() => {
+      const newElapsed = Math.floor((Date.now() - startRef.current) / 1000);
+      setElapsed(newElapsed);
+      if (newElapsed >= totalTarget) {
+        clearInterval(iv.current);
+        setRunning(false);
+        setFinished(true);
+        // notificação sonora simples
+        try { const ctx=new AudioContext(); const o=ctx.createOscillator(); const g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value=880; g.gain.setValueAtTime(0.3,ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.8); o.start(); o.stop(ctx.currentTime+0.8); } catch{}
+        onChange(Math.max(value, act.target_min));
+      }
+    }, 500);
   }
 
+  function pauseTimer() {
+    clearInterval(iv.current);
+    setRunning(false);
+    // acumula o tempo parcial no campo
+    if (elapsedMin > 0) onChange(Math.max(value, elapsedMin));
+  }
+
+  function resetTimer() {
+    clearInterval(iv.current);
+    setRunning(false);
+    setElapsed(0);
+    setFinished(false);
+  }
+
+  function toggle() { running ? pauseTimer() : startTimer(); }
+
   const pct = act.target_min > 0 ? Math.min(100, Math.round((value / act.target_min) * 100)) : 0;
-  const accentColor = value === 0 ? C.border : pct >= 100 ? C.success : pct >= 50 ? C.accent : C.warning;
+  const accentColor = finished ? C.success : value === 0 ? C.border : pct >= 100 ? C.success : pct >= 50 ? C.accent : C.warning;
+  const timerColor  = finished ? C.success : remaining < 60 ? C.danger : running ? C.accent : C.textMid;
+  const gc = groupColor(act.group||act.id);
+
+  // Porcentagem do countdown (quanto do timer já passou)
+  const timerPct = totalTarget > 0 ? Math.min(100, Math.round((elapsed / totalTarget) * 100)) : 0;
 
   return (
-    <div className="act-row" style={{ borderLeftColor: accentColor }}>
+    <div className="act-row" style={{ borderLeftColor: gc }}>
       <div style={{ flex:1, display:'flex', flexDirection:'column', gap:6 }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ fontSize:15 }}>{act.emoji}</span>
@@ -699,25 +758,46 @@ function ActivityRow({ act, value, onChange, C }) {
           <div style={{ flex:1, height:4, background:C.border, borderRadius:2, overflow:'hidden' }}>
             <div style={{ height:'100%', background:accentColor, width:`${pct}%`, borderRadius:2, transition:'width 0.4s' }}/>
           </div>
+          {(running || elapsed > 0) && (
+            <div style={{ width:80, height:4, background:C.border, borderRadius:2, overflow:'hidden', flexShrink:0 }}>
+              <div style={{ height:'100%', background: finished?C.success:timerColor, width:`${timerPct}%`, borderRadius:2, transition:'width 0.5s' }}/>
+            </div>
+          )}
           <span style={{ fontSize:12, color:accentColor, fontWeight:700, minWidth:34, textAlign:'right' }}>{pct}%</span>
         </div>
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
-        {running && (
-          <span style={{ fontSize:12, color:C.accent, fontVariantNumeric:'tabular-nums', fontWeight:700 }}>
-            {String(Math.floor(elapsed/60)).padStart(2,'0')}:{String(elapsed%60).padStart(2,'0')}
+        {/* Countdown display */}
+        <div style={{ background:C.bg, border:`1px solid ${running?timerColor:C.border}`, borderRadius:8,
+          padding:'3px 9px', minWidth:68, textAlign:'center', transition:'border-color 0.3s',
+          boxShadow: running ? `0 0 0 2px ${timerColor}22` : 'none' }}>
+          <span style={{ fontSize:12, fontWeight:800, color:timerColor, fontVariantNumeric:'tabular-nums' }}>
+            {finished ? '✓ OK' : `${String(remMin).padStart(2,'0')}:${String(remSec).padStart(2,'0')}`}
           </span>
+        </div>
+        {/* Play/Pause */}
+        <button onClick={toggle}
+          style={{ background: running ? C.warning : finished ? C.success : C.accent,
+            border:'none', borderRadius:7, width:30, height:30,
+            cursor:'pointer', color:'#fff', fontSize:12,
+            display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+            transition:'background 0.2s' }}>
+          {running ? '⏸' : '▶'}
+        </button>
+        {/* Reset — só quando há progresso */}
+        {(elapsed > 0 || finished) && (
+          <button onClick={resetTimer} title="Reiniciar"
+            style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:7, width:30, height:30,
+              cursor:'pointer', color:C.textSub, fontSize:13,
+              display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            ↺
+          </button>
         )}
         <input type="number" min={0} max={999} value={value===0?'':value} placeholder="0"
           onChange={e => onChange(Math.max(0, parseInt(e.target.value)||0))}
           style={{ width:58, padding:'5px 8px', background:C.bg, border:`1px solid ${C.border}`, borderRadius:8,
             color:C.text, fontSize:14, fontWeight:700, textAlign:'center', outline:'none', fontFamily:'inherit' }}/>
         <span style={{ fontSize:11, color:C.textSub }}>min</span>
-        <button onClick={toggle}
-          style={{ background:running?C.danger:C.accent, border:'none', borderRadius:7, width:30, height:30,
-            cursor:'pointer', color:'#fff', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-          {running?'⏹':'▶'}
-        </button>
       </div>
     </div>
   );
@@ -740,7 +820,7 @@ function KpiCard({ label, value, sub, icon, color, accent, C }) {
 function TodayScreen({ C, dark }) {
   const today = new Date();
   const todayKey = dateToKey(today);
-  const info = getCycleInfo(today);
+  const sched = getScheduleInfo(today);
   const tmpl = getActivities(today);
   const target = getDailyTarget(today);
   const [acts, setActs] = useState(tmpl.map(a => ({...a, done_min:0})));
@@ -789,9 +869,11 @@ function TodayScreen({ C, dark }) {
     </div>
   );
 
-  const s0 = new Date(2026,3,18);
-  const dayNum = Math.floor((new Date(today.getFullYear(),today.getMonth(),today.getDate()) - s0) / 86400000);
-  const cycleDay = ((dayNum % 14) + 14) % 14 + 1;
+  const dow = today.getDay();
+  const dowNames = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const mat2Label = sched.mat3
+    ? `${sched.mat1} · ${sched.mat2} · ${sched.mat3}`
+    : `${sched.mat1} · ${sched.mat2}`;
 
   return (
     <div className="fade-in" style={{ display:'flex', flexDirection:'column', height:'100%', minHeight:0, overflowY:'auto' }}>
@@ -807,7 +889,7 @@ function TodayScreen({ C, dark }) {
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           {streak > 0 && <StreakBadge streak={streak} C={C} />}
           <div style={{ fontSize:11, color:C.textSub, background:C.surfaceEl, border:`1px solid ${C.border}`, borderRadius:8, padding:'5px 12px', fontWeight:600 }}>
-            Dia {cycleDay}/14 do ciclo
+            Semana — {dowNames[dow]}
           </div>
         </div>
       </div>
@@ -815,7 +897,7 @@ function TodayScreen({ C, dark }) {
       {/* ── KPI ROW ── */}
       <div style={{ padding:'18px 32px 0', display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, flexShrink:0, maxWidth:1100, margin:'0 auto', width:'100%' }}>
         <KpiCard label="Total hoje" value={formatDur(total)} sub={`+${formatDur(bonus)} aulas`} icon="⏱" accent={C.accent} C={C} />
-        <KpiCard label="Ciclo atual" value={info.main} sub={info.extra ? `+ ${info.extra}` : `Dia ${cycleDay} de 14`} icon="📚" accent={C.text} C={C} />
+        <KpiCard label="Matérias hoje" value={sched.mat1} sub={sched.mat3 ? `+ ${sched.mat2} + ${sched.mat3}` : `+ ${sched.mat2}`} icon="📚" accent={C.text} C={C} />
         <KpiCard label="Tempo restante" value={remaining > 0 ? formatDur(remaining) : '—'} sub={`Meta: ${formatDur(target)}`} icon="🎯" accent={remaining > 0 ? C.warning : C.success} C={C} />
         <KpiCard label="Status" value={statusLabel} sub={`${pct}% da meta`} icon="✦" accent={statusColor} C={C} />
       </div>
@@ -967,7 +1049,7 @@ function CalendarScreen({ C }) {
     const k=dateToKey(date), data=dayData[k], tmpl=getActivities(date);
     const acts=tmpl.map(t=>({...t,done_min:data?.activities?.find(a=>a.id===t.id)?.done_min||0}));
     const vals={}; acts.forEach(a=>{vals[a.id]=a.done_min;});
-    setEditDay({date,k,acts,info:getCycleInfo(date)});
+    setEditDay({date,k,acts,info:getScheduleInfo(date)});
     setEditVals(vals); setEditBonus(data?.bonus_min||0);
   }
 
@@ -1046,7 +1128,9 @@ function CalendarScreen({ C }) {
                 <div style={{ fontWeight:800, fontSize:16, color:C.text }}>
                   {editDay.date.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}
                 </div>
-                <div style={{ fontSize:13, color:C.accent, fontWeight:600, marginTop:2 }}>{editDay.info.main}</div>
+                <div style={{ fontSize:13, color:C.accent, fontWeight:600, marginTop:2 }}>
+                  {editDay.info.mat3 ? `${editDay.info.mat1} · ${editDay.info.mat2} · ${editDay.info.mat3}` : `${editDay.info.mat1} · ${editDay.info.mat2}`}
+                </div>
               </div>
               <button onClick={()=>setEditDay(null)} style={{ background:'none', border:'none', color:C.textSub, fontSize:24, cursor:'pointer', lineHeight:1 }}>×</button>
             </div>
@@ -1102,8 +1186,7 @@ function StatsScreen({ C, dailyGoalOverride }) {
   const today = new Date();
 
   function getTarget(date) {
-    const isExtra = getCycleInfo(date).extra;
-    if (dailyGoalOverride) return isExtra ? dailyGoalOverride.extra : dailyGoalOverride.normal;
+    if (dailyGoalOverride) return hasThirdSubject(date) ? dailyGoalOverride.extra : dailyGoalOverride.normal;
     return getDailyTarget(date);
   }
 
@@ -1193,24 +1276,32 @@ function StatsScreen({ C, dailyGoalOverride }) {
   const tDays=prevStats?trendArrow(studied.length,prevStats.days):null;
   const tMet=prevStats?trendArrow(metDays.length,prevStats.met):null;
 
+  // subMap: tempo por matéria — extrai matéria do nome da atividade ("Lei Seca — Civil" → "Civil")
   const subMap={};
   for(const row of filtered){
-    const mainSubj=getCycleInfo(row.date).main;
-    const extraSubj=getCycleInfo(row.date).extra;
     for(const a of row.activities){
-      if(a.id==='teoria_extra'&&extraSubj) subMap[extraSubj]=(subMap[extraSubj]||0)+(a.done_min||0);
-      else if(a.id!=='teoria_extra') subMap[mainSubj]=(subMap[mainSubj]||0)+(a.done_min||0);
+      const m = a.name ? a.name.split(' — ')[1] : null;
+      if(m) subMap[m]=(subMap[m]||0)+(a.done_min||0);
+      else {
+        // questoes e anki: atribui à mat1 do dia para estatística
+        const s=getScheduleInfo(row.date);
+        subMap[s.mat1]=(subMap[s.mat1]||0)+(a.done_min||0);
+      }
     }
   }
   const subData=Object.entries(subMap).map(([name,value])=>({name,value})).filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
 
-  const actMap={lei_seca:0,informativos:0,teoria:0,teoria_extra:0,anki:0,questoes:0,bonus:0};
+  // actMap: agrega por grupo (lei_seca, doutrina, informativos, questoes, anki)
+  const actMap={lei_seca:0,doutrina:0,informativos:0,questoes:0,anki:0,bonus:0};
   for(const row of filtered){
-    for(const act of row.activities){if(actMap[act.id]!==undefined)actMap[act.id]+=(act.done_min||0);}
+    for(const act of row.activities){
+      const g = act.group || act.id;
+      if(actMap[g]!==undefined) actMap[g]+=(act.done_min||0);
+    }
     actMap.bonus+=(row.bonus_min||0);
   }
   const actData=Object.entries(actMap).filter(([,v])=>v>0)
-    .map(([id,value])=>({id,name:ACT_LABELS[id],value,color:ACT_COLORS_MAP[id]}));
+    .map(([id,value])=>({id,name:ACT_LABELS[id]||id,value,color:ACT_COLORS_MAP[id]||'#64748b'}));
 
   const moNames=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const moMap={};
@@ -1261,20 +1352,17 @@ function StatsScreen({ C, dailyGoalOverride }) {
     return result;
   })();
 
-  const allSubj=[...new Set([...CYCLE.map(c=>c.main),...CYCLE.filter(c=>c.extra).map(c=>c.extra)])];
+  const allSubj=[...new Set(Object.values(WEEKLY_SCHEDULE).flatMap(s=>[s.mat1,s.mat2,s.mat3].filter(Boolean)))];
   const sessCnt={};
   for(const row of filtered){
     if(row.activities.some(a=>(a.done_min||0)>0)){
-      sessCnt[getCycleInfo(row.date).main]=(sessCnt[getCycleInfo(row.date).main]||0)+1;
-      const ext=getCycleInfo(row.date).extra;
-      if(ext){const ea=row.activities.find(a=>a.id==='teoria_extra');if(ea&&(ea.done_min||0)>0)sessCnt[ext]=(sessCnt[ext]||0)+1;}
+      const s=getScheduleInfo(row.date);
+      [s.mat1,s.mat2,s.mat3].filter(Boolean).forEach(m=>{ sessCnt[m]=(sessCnt[m]||0)+1; });
     }
   }
   const subjectConsistency=allSubj.map(subj=>{
-    const isExtra=CYCLE.some(c=>c.extra===subj);
-    let possible,done;
-    if(isExtra){possible=filtered.filter(r=>getCycleInfo(r.date).extra===subj).length;done=filtered.filter(r=>getCycleInfo(r.date).extra===subj&&r.activities.some(a=>a.id==='teoria_extra'&&(a.done_min||0)>0)).length;}
-    else{possible=filtered.filter(r=>getCycleInfo(r.date).main===subj).length;done=filtered.filter(r=>getCycleInfo(r.date).main===subj&&r.activities.some(a=>(a.done_min||0)>0)).length;}
+    const possible=filtered.filter(r=>{const s=getScheduleInfo(r.date);return[s.mat1,s.mat2,s.mat3].filter(Boolean).includes(subj);}).length;
+    const done=filtered.filter(r=>{const s=getScheduleInfo(r.date);return[s.mat1,s.mat2,s.mat3].filter(Boolean).includes(subj)&&r.activities.some(a=>(a.done_min||0)>0);}).length;
     const pct=possible>0?Math.round((done/possible)*100):0;
     return {name:subj,value:pct,label:`${pct}% (${done}/${possible})`,color:pct>=80?C.success:pct>=50?C.warning:C.danger};
   }).sort((a,b)=>b.value-a.value);
@@ -1500,8 +1588,8 @@ function SettingsScreen({ C, dark, onToggleDark, dailyGoalOverride, onSetDailyGo
       const val=await DB.get(k); if(!val?.activities) continue;
       const date=keyToDate(k);
       const dateBR=`${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
-      for(const act of val.activities) lines.push(`${dateBR},${wd[date.getDay()]},"${getCycleInfo(date).main}","${act.name}",${act.target_min||0},${act.done_min||0},Regular`);
-      if((val.bonus_min||0)>0) lines.push(`${dateBR},${wd[date.getDay()]},"${getCycleInfo(date).main}","Aulas Assistidas",0,${val.bonus_min},Bônus`);
+      for(const act of val.activities) lines.push(`${dateBR},${wd[date.getDay()]},"${getScheduleInfo(date).mat1}","${act.name}",${act.target_min||0},${act.done_min||0},Regular`);
+      if((val.bonus_min||0)>0) lines.push(`${dateBR},${wd[date.getDay()]},"${getScheduleInfo(date).mat1}","Aulas Assistidas",0,${val.bonus_min},Bônus`);
     }
     const blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob);
